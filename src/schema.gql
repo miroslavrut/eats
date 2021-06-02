@@ -14,7 +14,7 @@ type Restaurant {
 type Query {
   isPizzaGood: Boolean!
   myRestaurant: Restaurant!
-  restaurants(veganOnly: Boolean!): [Restaurant!]!
+  restaurants: [Restaurant!]!
 }
 
 type Mutation {
