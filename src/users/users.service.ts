@@ -5,8 +5,10 @@ import { CreateAccountInput } from './dtos/create-account.dto';
 import { LoginInput } from './dtos/login.dto';
 import { User } from './entities/user.entity';
 import { JwtService } from 'src/jwt/jwt.service';
-import { EditProfileInput } from './dtos/edit-profile.dto';
+import { EditProfileInput, EditProfileOutput } from './dtos/edit-profile.dto';
 import { Verification } from 'src/common/entities/verfication.entity';
+import { VerifyEmailOutput } from './dtos/verify-email.dto';
+import { UserProfileOutput } from './dtos/user-profile.dto';
 
 @Injectable()
 export class UsersService {
@@ -75,32 +77,57 @@ export class UsersService {
     }
   }
 
-  async findById(id: number): Promise<User> {
-    return this.users.findOne({ id });
+  async findById(id: number): Promise<UserProfileOutput> {
+    try {
+      const user = await this.users.findOne({ id });
+      if (user) {
+        return {
+          ok: true,
+          user,
+        };
+      }
+    } catch (error) {
+      console.log(error);
+      return {
+        ok: false,
+        error: 'User not found',
+      };
+    }
   }
 
   async editProfile(
     userId: number,
     { email, password }: EditProfileInput,
-  ): Promise<User> {
-    const user = await this.users.findOne(userId);
-    if (email) {
-      user.email = email;
-      user.verifed = false;
-      await this.verifications.save(this.verifications.create({ user }));
+  ): Promise<EditProfileOutput> {
+    try {
+      const user = await this.users.findOne(userId);
+      if (email) {
+        user.email = email;
+        user.verifed = false;
+        await this.verifications.save(this.verifications.create({ user }));
+      }
+      if (password) {
+        user.password = password;
+      }
+      /**
+       * Using save instead of update, as update perform direct query on DB so beforeUpdate hook
+       * needed for hashing new password would be skipped. This way we use save directly on the entity
+       * so hook can catch it
+       */
+      this.users.save(user);
+      return {
+        ok: true,
+      };
+    } catch (error) {
+      console.log(error);
+      return {
+        ok: false,
+        error: 'Could not update profile',
+      };
     }
-    if (password) {
-      user.password = password;
-    }
-    /**
-     * Using save instead of update, as update perform direct query on DB so beforeUpdate hook
-     * needed for hashing new password would be skipped. This way we use save directly on the entity
-     * so hook can catch it
-     */
-    return this.users.save(user);
   }
 
-  async verifyEmail(code: string): Promise<boolean> {
+  async verifyEmail(code: string): Promise<VerifyEmailOutput> {
     try {
       const verification = await this.verifications.findOne(
         { code },
@@ -110,12 +137,12 @@ export class UsersService {
       if (verification) {
         verification.user.verifed = true;
         this.users.save(verification.user);
-        return true;
+        return { ok: true };
       }
-      throw new Error();
+      return { ok: false, error: 'Verification not found' };
     } catch (error) {
       console.log(error);
-      return false;
+      return { ok: false, error };
     }
   }
 }
